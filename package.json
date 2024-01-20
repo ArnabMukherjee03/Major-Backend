@@ -1,0 +1,30 @@
+{
+  "name": "major-backend",
+  "version": "1.0.0",
+  "description": "\"Backend For Major Project\"",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon -r dotenv/config --experimental-json-modules src/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ArnabMukherjee03/Major-Backend.git"
+  },
+  "keywords": [
+    "Backend"
+  ],
+  "author": "Arnab Mukherjee",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ArnabMukherjee03/Major-Backend/issues"
+  },
+  "homepage": "https://github.com/ArnabMukherjee03/Major-Backend#readme",
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.2",
+    "express": "^4.18.2",
+    "mongoose": "^8.1.0"
+  }
+}
