@@ -5,11 +5,27 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandeler.js";
 import { generateOtp } from "../utils/generateOtp.js";
-import { sendMail } from "../utils/mailService.js";
 
+const generateTokens = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
+
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
+
+    return { accessToken, refreshToken };
+  } catch (error) {
+    throw new ApiError(
+      500,
+      "Something went wrong while generating referesh and access token"
+    );
+  }
+};
 
 const registerUser = asyncHandler(async (req, res) => {
-  const { email, username,fullname, password } = await req.body;
+  const { email, username, fullname, password } = await req.body;
 
   if (
     [email, username, fullname, password].some((field) => field?.trim() === "")
@@ -34,14 +50,13 @@ const registerUser = asyncHandler(async (req, res) => {
 
   const avatarLocalPath = req.files?.avatar[0]?.path;
 
-
   if (!avatarLocalPath) {
     throw new ApiError(400, "Avatar file is required");
   }
 
   const user = await User.create({
     fullname,
-    avatar: avatarLocalPath, 
+    avatar: avatarLocalPath,
     email,
     password,
     username,
@@ -62,38 +77,97 @@ const registerUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, createdUser, "User registered Successfully"));
 });
 
-const verifyOtp = asyncHandler(async (req,res)=>{
-  const {user,otp} = await req.body;
+const verifyOtp = asyncHandler(async (req, res) => {
+  const { user, otp } = await req.body;
 
-  if (
-    [user,otp].some((field) => field?.trim() === "")
-  ) {
+  if ([user, otp].some((field) => field?.trim() === "")) {
     throw new ApiError(400, "All fileds are required");
   }
 
+  const otpData = await Otp.findOne({ user: user }).sort({ createdAt: -1 });
 
-  const otpData = await Otp.findOne({user:user});
-
-  if(!otpData){
-    throw new ApiError(404,"OTP expired, please try again")
+  if (!otpData) {
+    throw new ApiError(404, "OTP expired, please try again");
   }
 
-  const isOtp =  await bcrypt.compare(otp, otpData.otp);
+  const isOtp = await bcrypt.compare(otp, otpData.otp);
 
-  if(!isOtp){
-    throw new ApiError(404,"Please Enter Proper Otp..")
+  if (!isOtp) {
+    throw new ApiError(404, "Please Enter Proper Otp..");
   }
 
-  const updateUser = await User.findByIdAndUpdate(user,{verified: true},{new: true});
- 
-
+  const updateUser = await User.findByIdAndUpdate(
+    user,
+    { verified: true },
+    { new: true }
+  );
 
   return res
-  .status(201)
-  .json(new ApiResponse(200,{}, "Otp Verification Sucessfully"));
+    .status(201)
+    .json(new ApiResponse(200, {}, "Otp Verification Sucessfully"));
+});
+
+const loginUser = asyncHandler(async (req, res) => {
+  const { username, email, password } = await req.body;
+
+  if (!username && !email) {
+    throw new ApiError(400, "username or email required");
+  }
+
+  const user = await User.findOne({
+    $or: [{ username }, { email }],
+  });
+
+  if (!user) {
+    throw new ApiError(404, "User does not exist");
+  }
+
+  if (!user.verified) {
+    await generateOtp(user);
+    throw new ApiError(401, "Please Verify User!!");
+  }
+
+  const isPasswordValid = await user.isPasswordCorrect(password);
+
+  if (!isPasswordValid) {
+    throw new ApiError(401, "Invalid user credentials");
+  }
+
+  const { accessToken, refreshToken } = await generateTokens(user.id);
+
+  const loggedInUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
+
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          user: loggedInUser,
+          accessToken,
+          refreshToken,
+        },
+        "User logged In Successfully"
+      )
+    );
+});
+
+const logout = asyncHandler(async (req,res)=>{
+
+})
+
+const verifyUser = asyncHandler(async (req,res)=>{
+  
 })
 
 
-
-
-export {registerUser,verifyOtp};
+export { registerUser, verifyOtp, loginUser,logout, verifyUser };
